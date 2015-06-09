@@ -1,0 +1,173 @@
+;	=	Personal Notes on PDH Performance Counters	=
+;	   (stripped from _PDH_PerformanceCounters)
+;
+;	Author: Ascend4nt
+#cs
+; ===============================================================================================================================
+; Sources:
+;
+; PDH.DLL
+;	Using the PDH Functions to Consume Counter Data:
+;		http://msdn.microsoft.com/en-us/library/aa373214(VS.85).aspx
+;	Performance Counters:
+;		http://msdn.microsoft.com/en-us/library/aa373083(VS.85).aspx
+;	Enumerating Process Objects:
+;		http://msdn.microsoft.com/en-us/library/aa372151(VS.85).aspx
+;	Overview of Performance Data Collection (format of Counter paths info)
+;		http://technet.microsoft.com/en-us/library/cc784617.aspx
+;	Performance Counter Path:
+;		http://msdn.microsoft.com/en-us/library/cc238506(PROT.10).aspx
+;	Specifying a Counter Path (Windows) @ MSDN:
+;		http://msdn.microsoft.com/en-us/library/aa373193%28v=VS.85%29.aspx
+;	How to manually rebuild Performance Counter Library values:
+;		http://support.microsoft.com/kb/300956
+;
+;	CPU Usage for multi-processor/multi-core, using PDH (ASM):
+;		http://www.masm32.com/board/index.php?PHPSESSID=2016fd733e44fc2ee80e095726f225c5&topic=9343.0
+;
+;	AutoHotKey discussion on PDH:
+;		http://www.autohotkey.com/forum/topic17831.html
+;
+;	Registry Key location of Performance Counter Names & Numbers:
+;		HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Perflib
+;		 (Subkey is 009 for English)
+;
+; ALTERNATE REGISTRY VERSION SOURCES:
+; 	CodeProject: How to get CPU usage by performance counters (without PDH):
+;		http://www.codeproject.com/kb/system/cpuusageByDudiAvramov.aspx
+;	MSDN - INFO: Percent Total Performance Counter Changes on Windows:
+;		http://support.microsoft.com/kb/259390
+;	Performance Data Format (Registry):
+;		http://msdn.microsoft.com/en-us/library/aa373105(VS.85).aspx
+; ===============================================================================================================================
+; Performance Counters Requirements:
+; ===============================================================================================================================
+; Machine must support PDH (Win2000+), and not have any of the following registry values set to 1:
+;
+; - Key: HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Perflib
+;	- Value: Disable Performance Counters (REG_DWORD, 1 = Disabled, 0 = Enabled)
+;
+; - Key: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\PerfOS\Performance
+;	- Value: Disable Performance Counters (REG_DWORD, 1 = Disabled, 0 = Enabled)
+;
+; - Key: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\PerfProc\Performance
+;	- Value: Disable Performance Counters (REG_DWORD, 1 = Disabled, 0 = Enabled)
+;
+; Remote machines can be accessed, but the current machine must have the proper permissions and/or be logged in.
+;  Additionally, the Remote machine must:
+; - be turned on and connected to the network [LAN enabled]
+; - have permissions set on the registry that allows remote connections and/or remote performance monitoring by the user.
+; ===============================================================================================================================
+;
+; NOTE: Opening the PDH.DLL and obtaining a PDH Query Handle creates a small file in the @TempDir named something like:
+;	Perflib_Perfdata_xxx.dat
+;  This file is typically small (~16 KB), so it's not a concern. And it is automatically deleted after _PDH_UnInit().
+;
+; ===============================================================================================================================
+; 'Browse Counter Dialog' notes:
+; ===============================================================================================================================
+; This function has been the most buggy messed-up thing Microsoft has produced! (Seems Vista+ is where the bugs began)
+;  Among the bugs:
+; - The user can select an item and nothing will show up for 'Instances', which winds up returning a bad path
+; - Flag issues (iFlagMask):
+; * Vista+ O/S: adding 2 (single counter selection/add) causes blank-string returns (with 'success' result)
+;	  for counters with wildcard at end of path
+; * not adding 16 (Wildcard Instances) causes crashes (wth!?) when wildcards are selected (at least on Win7..)
+; * not adding 4 (multi-counter selection toggle) causes failure on return, because a Callback function must
+;	  be in place which processes each string individually.  This can be done, but would be better if user could
+;	  see & interact with (including removing) chosen counters. Too much work IMO for this function.
+; * +64 (Initialize Path) - fails in practice, at least Vista+, so it's useless (would be nice if it worked though!)
+;
+; ===============================================================================================================================
+; Counter NOTES [based on extensive testing & experimentation by Ascend4nt]:
+; ===============================================================================================================================
+; Format of a Counter Path (from MSDN). NOTE: Computer, ParentInstance, ObjectInstance, #InstanceIndex are optional parts):
+;	\\Computer\PerfObject(ParentInstance/ObjectInstance#InstanceIndex)\Counter
+;
+; \\MACHINE_NAME\ObjectName(Instance#x)\Counter
+; \\MACHINE_NAME\ObjectName(Instance/x)\Counter
+;
+; Example Counter for Performance Purposes:
+; \Process(Idle)\% Processor Time			; (Parent Instance=none,Object Instance='Idle', Instance Index= none (or #0)
+; \Thread(svchost/12#2)\% Processor Time		; (Parent Instance 'svchost', Object Instance #12 [0-based], Instance Index = #2)
+;
+; Example Counters that are for Info purposes:
+; \Process(svchost#1)\ID Process
+; \\MYPC\Process(svchost#0)\Creating Process ID
+; \\MYPC\Thread(System/10)\ID Process
+;
+; Wildcards can be used exclusively in each position. I.E.:
+;	\\*\ObjectName(Instance)\Counter
+;	\\MACHINE\*(Instance)\Counter
+;	\\MACHINE\ObjectName(*)\Counter
+;	\\MACHINE\ObjectName(Instance)\*
+;
+; Wildcards can even be placed in multiple spots:
+;	\\MACHINE\ObjectName(*)\*
+;
+; BUT BE WARNED, the more places you put it, the more counters you get back - and the
+;	likelihood that more will become 'Invalid' almost immediately (plus they will build on the time it takes to get values).
+;
+; !! What is NOT allowable is including any part of each position with a wildcard: !!
+;	\\MACHINE*\ObjectName*(Instance*)\Counter*	; (ex: \Process(svchost*)\% Processor Time)
+;
+;  ** EXCEPT ON VISTA+ **  (partial Wildcards ARE now allowed on these O/S's)
+;
+; WARNING: SOME Counter paths MAY contain the wildcard character (*), as recently discovered on a user's Win7 setup
+;	(counter of "Local Area Connection* 9" showed up).  I'm not sure of what effect this has on other parts of
+;	the code, but for now it appears to work okay with wildcard expansion of multiple objects.
+;
+; NOTE: #0 when applied to an Object Instance, refers to the 1st instance,
+;		the same as without a number :
+;		(svchost) = (svchost#0)
+;
+; MORE NOTES in general:
+;	Counters are indexed based on an internal numbered list - no instance # is permanently connected
+;		to an object!  This means that If "(Instance#0)" and "(Instance#1)" existed, but
+;		"(Instance#0)" closes, the internal numbering is restructured, and ANY Counter
+;		referencing "(Instance#0)" would STILL be valid because "(Instance#1)" is NOW
+;		"(Instance#0)" (it shifted/moved up).  This is the problem with Performance Counters,
+;		and a BIG reason why A.) extra verification is needed to keep a 'watchful' eye on
+;		Counters to be sure there is no shift, or B.) wildcard counters should be used
+;		to get a whole list and sort whats-what from there
+;
+; Additional NOTE (for Processes):
+;	Processes ending in .EXE are reported\looked up *without* the ending .EXE
+;		(i.e. svchost.exe = svchost, or svchost#0 (and #1 etc - depending on # of instances)
+;	Processes ending in *ANYTHING* else RETAIN their .ext (example: more.com, scrnsave.scr,Creative_Audio_Engine_Cleanup.0001)
+;
+; Yet MORE notes (for Processes):
+;	Running processes containing '#' followed by a digit will fail to return correct values
+;		UNLESS it is followed by a # and digit i.e. (#1process#0). NOTE: you should check that it doesn't
+;		already have one appended (in the case of multiple instances i.e. (#1process#1))
+;	Processes containing '(' or ')' - unless these appear in the order of (), these processes
+;		will cause errors with performance counters, no matter how you approach it
+;		(process)a) = error, ()process) = error, ()mine() = error, ((process)) = NO error
+;		There is no workaround for *individual* Counters. However (see #2 below):
+;
+; WILDCARD COUNTERS SUPPORT:
+;  While initially discouraged (and not supported), I now recommend these for use with certain things because of a number of things:
+;	1. Wildcard Counters, when gathered using _PDH_UpdateWildcardCounter(), will automatically adjust the group to account for
+;		the active # of present Counters. Dead Counters are automatically removed and New Counters are automatically added.
+;		NOTE: CPU Usage counters will fail on 1st call when there's a change in running Processes (new ones or old ones
+;			removed). This requires an additional call (a sleep or poll interval between calls helps)
+;	2. There is no longer any restrictions in the name of counters, as above for Processes.
+;		#x, and parentheses '(',')', in any form are *allowed*.
+;	3. 'Additional' instances of the same-named process no longer have a #1,#2 etc appended to it. It remains the
+;		same name for all occurrences.  This makes synching with say 'ProcessList()' much easier
+;	4. Initially I had thought the time needed for using/traversing these arrays would be overkill, but it turns out
+;		the time it takes is comparable to, and in some circumstances, faster than collecting individual counters
+;
+; CPU Usage INFO:
+;	Yes, the CPU Usage returned (when not capped at 100) is based on # of *logical* CPU's, not physical.
+;	 So getting that # is done from one of 3 methods:
+;	  a) GetSystemInfo DLL call; b) %NUMBER_OF_PROCESSORS% environment variable; or c) adding enumerated subkeys at:
+;		HKEY_LOCAL_MACHINE\HARDWARE\DESCRIPTION\System\CentralProcessor\
+; ===============================================================================================================================
+; Ideas trashed: 'ClearInvalidCounters' and 'GetUpdates':
+;	Instead of trying to maintain an array of Counters that come into existence (or leave it), the
+;	best method I've found is to use a wildcard counter, rebuild the array each time the count/data changes,
+;	compare a few elements (# counters, and next-to-last counter (when '_Total' exists)) and if something is new
+;	just use the new arrays.  It will save some headaches. See AddCounter and UpdateWildcardCounter functions & _PDH_ProcessAllCounters.au3
+; ===============================================================================================================================
+#ce
