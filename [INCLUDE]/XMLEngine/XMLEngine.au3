@@ -14,10 +14,10 @@
 #Include <String.au3>
 
 DirCreate(@TempDir & "\TUP\SignatureEngine")
-;FileInstall("C:\Users\omasgehstock\Desktop\MeineScripts\FinalPacker\Engine\SignatureEngine\IMAGE_FILE_MACHINE_AMD64.xml",@TempDir & "\TUP\SignatureEngine\")
-;FileInstall("C:\Users\omasgehstock\Desktop\MeineScripts\FinalPacker\Engine\SignatureEngine\IMAGE_FILE_MACHINE_I386.xml",@TempDir & "\TUP\SignatureEngine\")
-;FileInstall("C:\Users\omasgehstock\Desktop\MeineScripts\FinalPacker\Engine\SignatureEngine\IMAGE_FILE_MACHINE_IA64.xml",@TempDir & "\TUP\SignatureEngine\")
-;FileInstall("C:\Users\omasgehstock\Desktop\MeineScripts\FinalPacker\Engine\SignatureEngine\PLATFORM_INDEPENDENT.xml",@TempDir & "\TUP\SignatureEngine\")
+;FileInstall("C:\Users\\Desktop\MeineScripts\FinalPacker\Engine\SignatureEngine\IMAGE_FILE_MACHINE_AMD64.xml",@TempDir & "\TUP\SignatureEngine\")
+;FileInstall("C:\Users\\Desktop\MeineScripts\FinalPacker\Engine\SignatureEngine\IMAGE_FILE_MACHINE_I386.xml",@TempDir & "\TUP\SignatureEngine\")
+;FileInstall("C:\Users\\Desktop\MeineScripts\FinalPacker\Engine\SignatureEngine\IMAGE_FILE_MACHINE_IA64.xml",@TempDir & "\TUP\SignatureEngine\")
+;FileInstall("C:\Users\\Desktop\MeineScripts\FinalPacker\Engine\SignatureEngine\PLATFORM_INDEPENDENT.xml",@TempDir & "\TUP\SignatureEngine\")
 
 Dim $IMAGE_FILE_MACHINE_I386 = @ScriptDir & "\IMAGE_FILE_MACHINE_I386.XML"
 Dim $IMAGE_FILE_MACHINE_AMD64 = @ScriptDir & "\IMAGE_FILE_MACHINE_AMD64.XML"
@@ -43,8 +43,8 @@ For $x = 1 to $Return [0][0]
 		;ConsoleWrite($value[$x][1]); NAME
 	$value[$x][1] = StringRight($Return[$x][1],StringLen($Return[$x][1]) - StringInStr($Return[$x][1]," ","",-1))
 		;ConsoleWrite($value[$x][1] & @lf) ; ENTRYPE
-		;zurückgegeben werden hex zahlen die aneinander gereit sind
-		; also wird alle zwei ziffern ein " " eingefügt
+		;zurÃ¼ckgegeben werden hex zahlen die aneinander gereit sind
+		; also wird alle zwei ziffern ein " " eingefÃ¼gt
 	If $Format = 1 Then
 		For $y = 2 To StringLen($value[$x][1]) * 2 Step 3
 			$value[$x][1] = _StringInsert($value[$x][1]," ",$y)
