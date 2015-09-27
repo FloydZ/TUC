@@ -4,10 +4,13 @@ The Ultimate Compressor was initially a tool, or a collect of scripts, to compre
 After some time I added more and more different kinds of script, which lead to TUC.
 
 # Features
-Browser
-Compressor
-Music Player with Visualization
-Video Player
-PE Scanner with Signature Parser
-Task Manager
 
+0. Browser
+0. Compressor
+0. Music Player with Visualization
+0. Video Player
+0. PE Scanner with Signature Parser
+0. Task Manager
+
+# Usage 
+Just run the TUC.au3 with AutoIt.
